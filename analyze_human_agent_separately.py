@@ -18,7 +18,6 @@ from mutual_adaptation_analysis_individual import (
     visualize_mutual_adaptation_individual,
 )
 
-# 获取当前文件的上一级目录路径
 parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(parent_dir)
 import utils as ut
@@ -33,12 +32,9 @@ def load_dataframe(fname):
     return dataframe
 
 
-# 嵌入函数
 @torch.no_grad()
 def encode_sentences(texts, tokenizer, model, device):
     """
-    批量计算句向量 (mean pooling + L2 normalize)
-    与 SentenceTransformer("all-MiniLM-L6-v2") 等价
     """
     inputs = tokenizer(texts, padding=True, truncation=True, return_tensors="pt").to(device)
     outputs = model(**inputs)
@@ -50,18 +46,14 @@ def encode_sentences(texts, tokenizer, model, device):
     return emb.cpu()
 
 
-# 相似度矩阵函数
 def pairwise_similarity_matrix(embeddings: torch.Tensor) -> np.ndarray:
     """
-    已归一化后的 embedding -> pairwise cosine similarity 矩阵
     """
     return (embeddings @ embeddings.T).numpy()
 
 
 def bootstrap_consensus_from_pairs(sim_matrix, sample_ratio, n_repeats):
     """
-    从相似度矩阵上三角取样，重复采样多次，计算每轮 bootstrap 均值。
-    返回这些均值的分布（可用于置信区间）。
     """
     vals = sim_matrix[np.triu_indices_from(sim_matrix, k=1)]
     n = len(vals)
@@ -77,15 +69,12 @@ def bootstrap_consensus_from_pairs(sim_matrix, sample_ratio, n_repeats):
 
 def compute_human_agent_consensus_separated_bootstrap(agent_ratio, agent_style, simulation, tokenizer, model, device, seed=None):
     """
-    计算 human-only 共识、agent-only 共识、以及 human-agent 背离程度。
-    通过 bootstrap 估计每轮置信区间。
     """
 
-    # 设置随机种子
     if seed is not None:
         np.random.seed(seed)
         torch.manual_seed(seed)
-        # 若使用GPU
+        # GPU
         if torch.cuda.is_available():
             torch.cuda.manual_seed_all(seed)
             torch.backends.cudnn.deterministic = True
@@ -95,7 +84,6 @@ def compute_human_agent_consensus_separated_bootstrap(agent_ratio, agent_style, 
     n_rounds = len(simulation[any_user]["my_history"])
     user_ids = list(simulation.keys())
 
-    # 判断是否为纯人类组
     is_pure_human = (agent_ratio=="Agents 0%")
 
     results = []
@@ -108,7 +96,6 @@ def compute_human_agent_consensus_separated_bootstrap(agent_ratio, agent_style, 
                     agent_exprs.append(history[r])
                 else:
                     human_exprs.append(history[r])
-        # 纯人类组处理
         if is_pure_human:
             embeddings = encode_sentences(human_exprs, tokenizer, model, device)
             sim_h = pairwise_similarity_matrix(embeddings)
@@ -116,39 +103,36 @@ def compute_human_agent_consensus_separated_bootstrap(agent_ratio, agent_style, 
             for val in h_samples:
                 results.append({"agent_ratio": agent_ratio, "agent_style": agent_style, "round": r, "human_consensus": val, "agent_consensus": np.nan, "divergence": np.nan})
             continue
-        # 混合组正常处理
         if not human_exprs or not agent_exprs:
             continue
 
-        # 编码
         all_exprs = human_exprs + agent_exprs
         embeddings = encode_sentences(all_exprs, tokenizer, model, device)
         n_h = len(human_exprs)
         human_emb = embeddings[:n_h]
         agent_emb = embeddings[n_h:]
 
-        # human-only 共识
+        # human only
         h_samples = []
         if len(human_emb) > 1:
             sim_h = pairwise_similarity_matrix(human_emb)
             h_samples = bootstrap_consensus_from_pairs(sim_h, sample_ratio=0.6, n_repeats=100)
 
-        # agent-only 共识
+        # agent only
         a_samples = []
         if len(agent_emb) > 1:
             sim_a = pairwise_similarity_matrix(agent_emb)
             a_samples = bootstrap_consensus_from_pairs(sim_a, sample_ratio=0.6, n_repeats=100)
 
-        # human vs agent 背离：两个群体质心的余弦距离
-        # 先用全量点估计
+        # human vs agent
         h_centroid = torch.mean(human_emb, dim=0, keepdim=True)
         a_centroid = torch.mean(agent_emb, dim=0, keepdim=True)
         h_centroid = torch.nn.functional.normalize(h_centroid, p=2, dim=1)
         a_centroid = torch.nn.functional.normalize(a_centroid, p=2, dim=1)
-        
+
         full_divergence = float(1 - torch.mm(h_centroid, a_centroid.T).item())
 
-        # Bootstrap 置信区间（n-out-of-n）
+        # Bootstrap n out of n
         n_h, n_a = human_emb.shape[0], agent_emb.shape[0]
         div_repeats = 100
         div_samples = []
@@ -161,7 +145,6 @@ def compute_human_agent_consensus_separated_bootstrap(agent_ratio, agent_style, 
             a_c = torch.nn.functional.normalize(a_c, p=2, dim=1)
             div_samples.append(1 - torch.mm(h_c, a_c.T).item())
 
-        # 保存所有样本
         max_len = max(len(h_samples), len(a_samples), len(div_samples))
         for i in range(max_len):
             results.append({
@@ -177,13 +160,11 @@ def compute_human_agent_consensus_separated_bootstrap(agent_ratio, agent_style, 
 
 def compute_human_agent_consensus_separated(agent_ratio, agent_style, simulation, tokenizer, model, device):
     """
-    计算 human-only 共识、agent-only 共识、以及 human-agent 背离程度。
     """
     any_user = next(iter(simulation))
     n_rounds = len(simulation[any_user]["my_history"])
     user_ids = list(simulation.keys())
 
-    # 判断是否为纯人类组
     is_pure_human = (agent_ratio=="Agents 0%")
 
     results = []
@@ -196,7 +177,6 @@ def compute_human_agent_consensus_separated(agent_ratio, agent_style, simulation
                     agent_exprs.append(history[r])
                 else:
                     human_exprs.append(history[r])
-        # 纯人类组处理
         if is_pure_human:
             embeddings = encode_sentences(human_exprs, tokenizer, model, device)
             sim_h = pairwise_similarity_matrix(embeddings)
@@ -204,18 +184,16 @@ def compute_human_agent_consensus_separated(agent_ratio, agent_style, simulation
             human_cons = float(np.mean(hvals))
             results.append({ "agent_ratio": agent_ratio, "agent_style": agent_style, "round": r, "human_consensus": human_cons, "agent_consensus": np.nan, "divergence": np.nan})
             continue
-        # 混合组正常处理
         if not human_exprs or not agent_exprs:
             continue
 
-        # 编码
         all_exprs = human_exprs + agent_exprs
         embeddings = encode_sentences(all_exprs, tokenizer, model, device)
         n_h = len(human_exprs)
         human_emb = embeddings[:n_h]
         agent_emb = embeddings[n_h:]
 
-        # human-only 共识
+        # human only
         if len(human_emb) > 1:
             sim_h = pairwise_similarity_matrix(human_emb)
             hvals = sim_h[np.triu_indices_from(sim_h, k=1)]
@@ -223,7 +201,7 @@ def compute_human_agent_consensus_separated(agent_ratio, agent_style, simulation
         else:
             human_cons = np.nan
 
-        # agent-only 共识
+        # agent only
         if len(agent_emb) > 1:
             sim_a = pairwise_similarity_matrix(agent_emb)
             avals = sim_a[np.triu_indices_from(sim_a, k=1)]
@@ -231,13 +209,13 @@ def compute_human_agent_consensus_separated(agent_ratio, agent_style, simulation
         else:
             agent_cons = np.nan
 
-        # human vs agent 背离：两个群体质心的余弦距离
+        # human vs agent
         h_centroid = torch.mean(human_emb, dim=0, keepdim=True)
         a_centroid = torch.mean(agent_emb, dim=0, keepdim=True)
         h_centroid = torch.nn.functional.normalize(h_centroid, p=2, dim=1)
         a_centroid = torch.nn.functional.normalize(a_centroid, p=2, dim=1)
         divergence = float(1 - torch.mm(h_centroid, a_centroid.T).item())
-        
+
         results.append({"agent_ratio": agent_ratio, "agent_style": agent_style, "round": r, "human_consensus": human_cons, "agent_consensus": agent_cons, "divergence": divergence})
     return pd.DataFrame(results)
 
@@ -248,19 +226,16 @@ def classify_ratio(x):
     else: return None
 
 
-# 沿 round 做滚动平滑（按组分别进行）
+# round
 def roll(g):
     g = g.sort_values("round")
     for m in ["human_mean","human_sd","agent_mean","agent_sd","div_mean","div_sd"]:
         g[m] = g[m].rolling(smooth_window, center=True, min_periods=1).mean()
     return g
-    
+
 
 def analyze_semantic_drift(simulation, tokenizer, model, device, agent_ratio, agent_style, reduce_dim=2, normalize=True):
     """
-    分析群体间语义漂移 (Cross-group Semantic Drift)
-    对每轮计算human与agent的语义质心轨迹，并投影到2D (PCA) 空间。
-    可以观察两群体是否趋同或分化。
     """
     any_user = next(iter(simulation))
     n_rounds = len(simulation[any_user]["my_history"])
@@ -277,11 +252,9 @@ def analyze_semantic_drift(simulation, tokenizer, model, device, agent_ratio, ag
                 else:
                     human_exprs.append(history[r])
 
-        # 若某组为空则跳过
         if not human_exprs or not agent_exprs:
             continue
 
-        # 编码
         all_exprs = human_exprs + agent_exprs
         embeddings = encode_sentences(all_exprs, tokenizer, model, device)
         n_h = len(human_exprs)
@@ -298,12 +271,10 @@ def analyze_semantic_drift(simulation, tokenizer, model, device, agent_ratio, ag
         human_centroids.append(h_c)
         agent_centroids.append(a_c)
 
-    # 合并所有质心并降维
     all_centroids = np.vstack(human_centroids + agent_centroids)
     pca = PCA(n_components=reduce_dim)
     coords_2d = pca.fit_transform(all_centroids)
 
-    # 拆分回来
     h_coords = coords_2d[:len(human_centroids)]
     a_coords = coords_2d[len(human_centroids):]
 
@@ -317,8 +288,6 @@ def analyze_semantic_drift(simulation, tokenizer, model, device, agent_ratio, ag
 
 def adaptation_attribution(H, A, eps=1e-9, return_per_round=False):
     """
-    H, A: np.ndarray shape (T, 2)  # 每轮人类/AI质心(在PCA/UMAP后的2D)
-    返回：整体归因指标 + 贡献占比 + 侧向漂移
     """
     assert H.shape == A.shape and H.shape[0] >= 2
     T = H.shape[0] - 1
@@ -328,19 +297,17 @@ def adaptation_attribution(H, A, eps=1e-9, return_per_round=False):
     for t in range(T):
         d = A[t] - H[t]
         dist = np.linalg.norm(d)
-        if dist < eps:  # 两质心几乎重合，跳过该轮的方向归一化
+        if dist < eps:
             u = np.zeros_like(d)
         else:
             u = d / dist
         dH = H[t+1] - H[t]
         dA = A[t+1] - A[t]
 
-        # 平行（朝向）分量
-        pH = float(np.dot(dH, u))            # 人 -> AI 方向的贡献
-        pA = float(np.dot(dA, -u))           # AI -> 人 方向的贡献
+        pH = float(np.dot(dH, u))
+        pA = float(np.dot(dA, -u))
         pH_list.append(pH); pA_list.append(pA)
 
-        # 垂直（侧向）分量
         sH = float(np.linalg.norm(dH - pH * u))
         sA = float(np.linalg.norm(dA - pA * (-u)))
         sH_list.append(sH); sA_list.append(sA)
@@ -355,9 +322,9 @@ def adaptation_attribution(H, A, eps=1e-9, return_per_round=False):
 
     out = {
         "C_H": C_H, "C_A": C_A,
-        "AI_index": ai_index,          # >0 人类主导靠近；<0 AI主导
-        "Human_share": human_share,    # 人类平行贡献占比
-        "Side_H": S_H, "Side_A": S_A,  # 侧向漂移累计
+        "AI_index": ai_index,
+        "Human_share": human_share,
+        "Side_H": S_H, "Side_A": S_A,
         "mean_distance": float(np.mean(d_list)),
     }
 
@@ -368,7 +335,6 @@ def adaptation_attribution(H, A, eps=1e-9, return_per_round=False):
 
 
 
-# 提取数值比例用于排序，但绘图用类别等距
 def parse_ratio(x):
     if x == "Agents 0%":
         return 0.0
@@ -401,15 +367,9 @@ def compute_final_consensus_distance_to_t0_centroids(
     consensus_group: str = "all",   # "all" | "human" | "agent"
 ):
     """
-    计算：
-    1) final consensus centroid（默认 all participants at final_round）
     2) t=0 human centroid
     3) t=0 agent centroid
-    并返回 final->t0_human / final->t0_agent 的 cosine distance。
 
-    注意：
-    - Agents 0% 时没有 t0 agent centroid，dist_final_to_t0_agent = np.nan
-    - 若某组在 t0 或 final 为空，则对应距离为 np.nan
     """
     any_user = next(iter(simulation))
     n_rounds = len(simulation[any_user]["my_history"])
@@ -494,10 +454,7 @@ def compute_final_consensus_distance_to_t0_centroids(
 
 def extract_t0_final_embeddings(simulation, tokenizer, model, device, t0_round: int = 0, final_round: int | None = None):
     """
-    返回四组点云 embedding
     H0 A0 Hf Af
-    每组是 torch.Tensor shape (n, d) 或 None
-    以及对应的文本列表
     """
     any_user = next(iter(simulation))
     n_rounds = len(simulation[any_user]["my_history"])
@@ -553,11 +510,6 @@ def mean_sem(x):
 @torch.no_grad()
 def compute_final_round_human_dispersion(agent_ratio, agent_style, simulation, tokenizer, model, device):
     """
-    每个 agent_ratio 下：
-      - 取最终轮次（n_rounds-1）的人类回答
-      - 编码并计算 final human centroid
-      - 计算每个 human embedding 到 centroid 的 cosine distance
-      - 返回 mean ± SEM
     """
     any_user = next(iter(simulation))
     n_rounds = len(simulation[any_user]["my_history"])
@@ -603,27 +555,25 @@ def compute_final_round_human_dispersion(agent_ratio, agent_style, simulation, t
 
 if __name__ == "__main__":
 
-    smooth_window = 3 #5 #3  # 可选平滑窗口大小，例如3表示滑动平均3轮；设为1则不开启平滑
+    smooth_window = 3
     print("Preparing Fig. 1c...")
 
     # Load similarity evaluator
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model_name = 'all-MiniLM-L6-v2'  
-    MODEL_ID = 'sentence-transformers/all-MiniLM-L6-v2'  
+    model_name = 'all-MiniLM-L6-v2'
+    MODEL_ID = 'sentence-transformers/all-MiniLM-L6-v2'
     MODEL_CACHE_DIR = os.environ.get("MODEL_CACHE_DIR", f"processed_data/model_cache/{model_name}")
     snapshot_download(MODEL_ID, cache_dir=MODEL_CACHE_DIR)
-    # 第一次运行时下载模型
     if not os.path.exists(MODEL_CACHE_DIR):
         model_dir = snapshot_download(MODEL_ID, cache_dir=MODEL_CACHE_DIR)
     else:
-        # 自动找到 HF 格式模型目录
+        # HF
         model_dir = ut.find_hf_model_dir(MODEL_CACHE_DIR)
-    # 加载 tokenizer 和 model
+    # tokenizer model
     tokenizer = AutoTokenizer.from_pretrained(model_dir)
     model = AutoModel.from_pretrained(model_dir).to(device)
     model.eval()
 
-    ##############################################################################################################
     fnames = [
         "processed_data/A4.pkl",  # 12.5
         "processed_data/A3.pkl",  # 33.3
@@ -640,7 +590,7 @@ if __name__ == "__main__":
     agent_ratio_list = ["Agents 12.5%", "Agents 33%", "Agents 50%", "Agents 75%"]
     agent_style_list = ['Neutral',   'Neutral',      'Neutral',     'Neutral']
     agent_label_list = ["12.5%", "33.3%", "50%", "75%"]
-    run_id_list = [0, 0, 0, 0] 
+    run_id_list = [0, 0, 0, 0]
 
     packs = []
     for i, dataframe in enumerate(dataframes):

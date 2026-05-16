@@ -1,12 +1,8 @@
 """
 plot_fig3_combined_continuous.py
 ================================
-Generates the combined Fig 3 (b–e) panels by reading pre-computed
 intermediate results. Uses continuous early-diffusion CLR (v2w).
 
-Layout: 2 rows × 3 panels
-  Row 1 — Agent trait experiment (Neutral / High Adoption / High Persistence)
-  Row 2 — Base model experiment  (32B / 7B)
 
   Col 1: NAdopt Early vs Late (human vs agent)
   Col 2: Final consensus strength
@@ -38,8 +34,8 @@ SAVE_DIR  = "./figures/"
 os.makedirs(SAVE_DIR, exist_ok=True)
 
 
-# ── Extra conditions to compute NAdopt for ───────────────────────────────────
-# ── colours ──────────────────────────────────────────────────────────────────
+# Extra conditions to compute NAdopt for
+# colours
 C_HUMAN    = "#4e9ecf"
 C_AGENT    = "#e08c3a"
 C_NEUTRAL  = "#4e9ecf"
@@ -52,9 +48,7 @@ CLR_HIGH   = "#67b0a8"   # CLR > 1 (conceptual dominant)
 CLR_LOW    = "#c0514e"   # CLR < 1 (lexical dominant)
 
 
-# ════════════════════════════════════════════════════════════════════════════
 # Helpers
-# ════════════════════════════════════════════════════════════════════════════
 
 def load_pkl(path):
     with open(path, "rb") as f:
@@ -82,16 +76,13 @@ def summarize_early_late(mat, roles, role, first_k=20, last_k=20):
     return _ms(early_ind) + _ms(late_ind)
 
 
-# ════════════════════════════════════════════════════════════════════════════
 # Panel plotters
-# ════════════════════════════════════════════════════════════════════════════
 
 def panel_consensus(ax, consensus_dict, cond_keys, cond_labels, cond_colors,
                     baseline_key=None, title=""):
     """
     Final consensus strength from consensus_dict['all_pairs_consensus_adjusted'][key].
     Each key's value is a DataFrame with columns: round, mean_consensus, sem_consensus.
-    Plots the final-round mean ± 1.96*SEM (95% CI) as errorbar points.
     """
     metric = "all_pairs_consensus_adjusted"
     x = np.arange(len(cond_keys), dtype=float)
@@ -122,7 +113,7 @@ def panel_consensus(ax, consensus_dict, cond_keys, cond_labels, cond_colors,
         except (KeyError, IndexError):
             pass
 
-    # significance brackets (z-test using mean ± SEM)
+    # significance brackets (z test using mean SEM)
     for xi in range(len(cond_keys) - 1):
         try:
             df0 = consensus_dict[metric][cond_keys[xi]]
@@ -183,9 +174,7 @@ def panel_clr(ax, clr_dict, cond_labels, title=""):
     ], frameon=False, fontsize=7.5, loc="upper left")
 
 
-# ════════════════════════════════════════════════════════════════════════════
 # Main figure
-# ════════════════════════════════════════════════════════════════════════════
 
 def _get_consensus(consensus_dict, cons_key):
     """Return (mean, sem) of final-round consensus."""
@@ -238,7 +227,7 @@ def plot_discrete_outcomes(consensus_dict, all_contrib_results, group_name,
     clr_dict = all_contrib_results[group_name]["clr"]
     n_cond   = len(cfg["cons_keys"])
 
-    # ── collect data ──────────────────────────────────────────────────────────
+    # collect data
     xs       = np.arange(n_cond, dtype=float)
     ys_clr   = []
     labels   = []
@@ -266,7 +255,7 @@ def plot_discrete_outcomes(consensus_dict, all_contrib_results, group_name,
         else:
             box_data.append(np.array([]))
 
-    # ── plot: 1 × 2 panels ───────────────────────────────────────────────────
+    # plot: 1 2 panels
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(7, 4.2))
     bar_width = 0.55 if n_cond >= 3 else 0.45
 
@@ -318,14 +307,12 @@ def plot_discrete_outcomes(consensus_dict, all_contrib_results, group_name,
     return fig
 
 
-# ════════════════════════════════════════════════════════════════════════════
 # MAIN
-# ════════════════════════════════════════════════════════════════════════════
 
 if __name__ == "__main__":
 
 
-    # ── Load contribution results (CLR) ───────────────────────────────────────
+    # Load contribution results (CLR)
     contrib_path = os.path.join(INTER_DIR, "all_contribution_results_v2w.pkl")
     if not os.path.exists(contrib_path):
         raise FileNotFoundError(
@@ -334,23 +321,23 @@ if __name__ == "__main__":
     print("Preparing Fig. 3d-g...")
     all_contrib_results = load_pkl(contrib_path)
 
-    # ── Load consensus dict ───────────────────────────────────────────────────
+    # Load consensus dict
     consensus_path = "processed_data/consensus_dict_remove_ind.pkl"
     if not os.path.exists(consensus_path):
         raise FileNotFoundError(f"Consensus dict not found: {consensus_path}")
     consensus_dict = load_pkl(consensus_path)
     metric_keys = list(consensus_dict.get("all_pairs_consensus_adjusted", {}).keys())
 
-    # ── Plot ──────────────────────────────────────────────────────────────────
+    # Plot
 
-    # ── Load panel_adj for individual-level consensus box plots ─────────────
+    # Load panel_adj for individual level consensus box plots
     panel_adj_path = "processed_data/panel_adj.pkl"
     if os.path.exists(panel_adj_path):
         panel_adj = pd.read_pickle(panel_adj_path)
     else:
         panel_adj = None
 
-    # ── Scatter plots: discrete conditions vs outcomes ──────────────────────
+    # Scatter plots: discrete conditions vs outcomes
     for gname in ["agent_trait", "base_model"]:
         plot_discrete_outcomes(
             consensus_dict, all_contrib_results,

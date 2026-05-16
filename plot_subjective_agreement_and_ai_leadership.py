@@ -14,21 +14,21 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 
-# ── Paths ─────────────────────────────────────────────────────────────────────
+# Paths
 RESULTS_DIR = "processed_data/results"
 FIGS_DIR    = "figures"
 os.makedirs(FIGS_DIR, exist_ok=True)
 
-# ── Experiment metadata ───────────────────────────────────────────────────────
+# Experiment metadata
 experiment2ratio = {
     'A2': 50.0, 'A3': 33.3, 'A4': 12.5, 'A5': 75.0,
 }
 
-# ── Column names ──────────────────────────────────────────────────────────────
+# Column names
 Q3_COL = "agreement"
 Q6_COL = "ai_leadership"
 
-# ── Load data ─────────────────────────────────────────────────────────────────
+# Load data
 frames = []
 for exp in experiment2ratio:
     path = os.path.join(RESULTS_DIR,
@@ -44,7 +44,7 @@ common_df = pd.concat(frames, ignore_index=True)
 common_df[Q3_COL] = pd.to_numeric(common_df[Q3_COL], errors="coerce")
 common_df[Q6_COL] = pd.to_numeric(common_df[Q6_COL], errors="coerce")
 
-# ── Style ─────────────────────────────────────────────────────────────────────
+# Style
 plt.rcParams.update({
     "font.family": "Arial", "font.size": 9,
     "axes.linewidth": 0.8,
@@ -67,7 +67,7 @@ STAGES       = ["H1", "H2", "H3"]
 STAGE_LABELS = ["H1", "H2", "H3"]
 X_TICKS      = np.arange(len(STAGES))
 
-# ── Map ratio → stage ────────────────────────────────────────────────────────
+# Map ratio stage
 def map_stage(r):
     if r == 12.5:          return "H1"
     if r in [33.3, 50.0]:  return "H2"
@@ -76,7 +76,7 @@ def map_stage(r):
 
 common_df["stage"] = common_df["agent_ratio"].apply(map_stage)
 
-# ── Compute summaries by stage ────────────────────────────────────────────────
+# Compute summaries by stage
 def get_summary(col):
     sub = common_df[common_df["stage"].isin(STAGES)].dropna(subset=[col])
     return (sub.groupby("stage")[col]
@@ -93,11 +93,11 @@ base_df = common_df[common_df["agent_ratio"] == 0.0]
 b3 = base_df[Q3_COL].mean()
 b6 = base_df[Q6_COL].mean()
 
-# ── Colors ────────────────────────────────────────────────────────────────────
-C_Q3 = "#4292c6"   # blue  – agreement (left axis, human color)
-C_Q6 = "#b95a58"   # red   – AI leadership (right axis, agent color)
+# Colors
+C_Q3 = "#4292c6"
+C_Q6 = "#b95a58"
 
-# ── Figure: single panel, dual y-axis ────────────────────────────────────────
+# Figure: single panel, dual y axis
 fig, ax1 = plt.subplots(figsize=(5.5, 4.2))
 ax2 = ax1.twinx()
 
@@ -107,13 +107,13 @@ for i_lo, i_hi, color, label in PHASE_BG:
 
 ## baselines
 
-# Q3 – agreement (left axis, blue)
+# Q3 agreement (left axis, blue)
 ax1.errorbar(X_TICKS, y3, yerr=e3,
              fmt="o-", color=C_Q3, ms=6, lw=1.5,
              capsize=3, elinewidth=1.2, zorder=3,
              label="Agreement with final description")
 
-# Q6 – AI leadership (right axis, red, square markers)
+# Q6 AI leadership (right axis, red, square markers)
 ax2.errorbar(X_TICKS, y6, yerr=e6,
              fmt="s--", color=C_Q6, ms=6, lw=1.5,
              capsize=3, elinewidth=1.2, zorder=3,

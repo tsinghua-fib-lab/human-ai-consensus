@@ -30,14 +30,14 @@ import torch
 import pickle
 from transformers import AutoTokenizer, AutoModel
 
-# ── Paths ─────────────────────────────────────────────────────────────────────
+# Paths
 RESULTS_DIR = "processed_data/results"
 DATA_DIR    = "processed_data"
 FIGS_DIR    = "figures"
 MODEL_CACHE = os.environ.get("MODEL_CACHE_DIR", "processed_data/model_cache/all-MiniLM-L6-v2")
 os.makedirs(FIGS_DIR, exist_ok=True)
 
-# ── Experiment metadata ───────────────────────────────────────────────────────
+# Experiment metadata
 experiment2ratio = {
     'A2': 50.0, 'A3': 33.3, 'A4': 12.5, 'A5': 75.0,
 }
@@ -54,14 +54,14 @@ def sig_label(p):
     if p < 0.05:  return "*"
     return "n.s."
 
-# ── Find HF model dir ─────────────────────────────────────────────────────────
+# Find HF model dir
 def find_hf_model_dir(cache_dir):
     for root, dirs, files in os.walk(cache_dir):
         if "config.json" in files and "tokenizer_config.json" in files:
             return root
     return cache_dir
 
-# ── Load embedding model (aligned with calculate_consensus.py) ────────────────
+# Load embedding model (aligned with calculate_consensus.py)
 print("Preparing Fig. 4b-d...")
 device    = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model_dir = find_hf_model_dir(MODEL_CACHE)
@@ -92,7 +92,7 @@ def cosine_sim_pairs(texts_a, texts_b):
     emb_b = encode_sentences(texts_b)
     return (emb_a * emb_b).sum(dim=1).numpy()
 
-# ── Load questionnaire data ───────────────────────────────────────────────────
+# Load questionnaire data
 frames = []
 missing_questionnaire_files = []
 for exp in experiment2ratio:
@@ -125,7 +125,7 @@ df_all = (raw[raw["agent_ratio"].isin([12.5, 33.3, 50.0, 75.0])]
           .copy()
           .reset_index(drop=True))
 
-# ── Compute text features ─────────────────────────────────────────────────────
+# Compute text features
 df_all["pair_sim"]   = cosine_sim_pairs(
     df_all["you"].astype(str).tolist(),
     df_all["peer"].astype(str).tolist()
@@ -136,7 +136,7 @@ df_all["peer_len"]   = df_all["peer"].astype(str).str.split().str.len()
 df_all["pair_sim_z"] = (df_all["pair_sim"] - df_all["pair_sim"].mean()) / df_all["pair_sim"].std()
 df_all["peer_len_z"] = (df_all["peer_len"] - df_all["peer_len"].mean()) / df_all["peer_len"].std()
 
-# ── Compute group centroid per round from pkl data ────────────────────────────
+# Compute group centroid per round from pkl data
 experiment2pkl = {
     'A2': os.path.join(DATA_DIR, "A2.pkl"),
     'A3': os.path.join(DATA_DIR, "A3.pkl"),
@@ -184,7 +184,7 @@ for exp_id, pkl_path in experiment2pkl.items():
     for r, vec in centroids.items():
         centroid_lookup[(exp_id, r)] = vec
 
-# ── Compute peer_centroid_sim ─────────────────────────────────────────────────
+# Compute peer_centroid_sim
 df_all["round"] = pd.to_numeric(df_all["round"], errors="coerce").astype(int)
 peer_texts = df_all["peer"].astype(str).tolist()
 peer_embs = encode_sentences(peer_texts)
@@ -210,7 +210,7 @@ df_all["stage"]     = df_all["agent_ratio"].apply(map_stage)
 df_all["stage"]     = pd.Categorical(df_all["stage"],
                                       categories=["H1","H2","H3"], ordered=True)
 
-# ── Model 1: global with controls ────────────────────────────────────────────
+# Model 1: global with controls
 m_all = smf.ols(
     "willingness ~ C(ratio_cat) + judged_ai + pair_sim_z + peer_len_z + peer_centroid_sim_z",
     data=df_all
@@ -221,7 +221,7 @@ se_b = m_all.bse["judged_ai"]
 p_b  = m_all.pvalues["judged_ai"]
 ci_b = m_all.conf_int().loc["judged_ai"].tolist()
 
-# ── Models 2a/2b/2c: separate OLS per stage ──────────────────────────────────
+# Models 2a/2b/2c: separate OLS per stage
 # Standardization uses global mean/std (computed above) for comparability
 
 stage_defs = {
@@ -243,7 +243,7 @@ for stage, sub in stage_defs.items():
     p    = m.pvalues["judged_ai"]
     b[stage] = (coef, se, p, (coef - 1.96*se, coef + 1.96*se))
 
-# ── Z-tests comparing adjacent stages ────────────────────────────────────────
+# Z tests comparing adjacent stages
 def z_test_diff(b1, b2):
     diff = b2[0] - b1[0]
     se   = np.sqrt(b1[1]**2 + b2[1]**2)
@@ -255,7 +255,7 @@ diff_H2_H1, se_H2_H1, p_H2_H1 = z_test_diff(b["H1"], b["H2"])
 diff_H3_H2, se_H3_H2, p_H3_H2 = z_test_diff(b["H2"], b["H3"])
 
 
-# ── Style ─────────────────────────────────────────────────────────────────────
+# Style
 plt.rcParams.update({
     "font.family": "Arial", "font.size": 9,
     "axes.linewidth": 0.8,
@@ -272,7 +272,7 @@ STAGES       = ["H1", "H2", "H3"]
 STAGE_LABELS = ["H1", "H2", "H3"]
 Y_POS        = [2, 1, 0]
 
-# ── Panel b (new): Δ adoption willingness (judged AI − judged Human) by stage ─
+# Panel b (new): adoption willingness (judged AI judged Human) by stage
 will_diff_data = []
 for stage_name in STAGES:
     sub = stage_defs[stage_name]
@@ -328,7 +328,7 @@ fig_bw.savefig(out_bw, dpi=300, bbox_inches="tight")
 plt.close(fig_bw)
 print(f"Generated figure: {out_bw}")
 
-# ── Panel c (forest plot): all non-fixed-effect predictors ───────────────────
+# Panel c (forest plot): all non fixed effect predictors
 # Extract coef, CI, p for each predictor
 predictors = [
     ("judged_ai",            "Perceived AI\nidentity"),
@@ -338,9 +338,9 @@ predictors = [
 ]
 
 def point_color(coef, p):
-    if p >= 0.05:   return "#999999"           # n.s. → grey
-    if coef > 0:    return COLOR_AGENT          # positive significant → agent red
-    return COLOR_HUMAN                          # negative significant → human blue
+    if p >= 0.05:   return "#999999"
+    if coef > 0:    return COLOR_AGENT
+    return COLOR_HUMAN
 
 fig_b, ax_b = plt.subplots(figsize=(5.5, 4.2))
 ax_b.axvline(0, color="black", lw=0.9, ls="--", alpha=0.45, zorder=1)
@@ -367,7 +367,7 @@ ax_b.set_ylim(-0.6, n_preds - 0.4)
 all_ci_b = [m_all.conf_int().loc[t] for t, _ in predictors]
 ax_b.set_xlim(min(c[0] for c in all_ci_b) - 0.15,
               max(c[1] for c in all_ci_b) + 0.65)
-ax_b.set_xlabel("Effect on adoption willingness (β, 95% CI)", fontsize=12)
+ax_b.set_xlabel("Effect on adoption willingness (, 95% CI)", fontsize=12)
 fig_b.tight_layout()
 out_b = os.path.join(FIGS_DIR, "fig4c.pdf")
 fig_b.savefig(out_b, dpi=300, bbox_inches="tight")
@@ -375,7 +375,7 @@ fig_b.savefig(out_b, dpi=300, bbox_inches="tight")
 plt.close(fig_b)
 print(f"Generated figure: {out_b}")
 
-# ── Panel d: peer_centroid_sim by judged identity × stage ─────────────────────
+# Panel d: peer_centroid_sim by judged identity stage
 STAGES       = ["H1", "H2", "H3"]
 STAGE_LABELS = ["H1", "H2", "H3"]
 C_H1, C_H2, C_H3 = "#4e9ecf", "#e08c3a", "#5aaa6b"
@@ -386,10 +386,10 @@ PHASE_BG = [
     (2, 2, "#d5f0dc"),
 ]
 
-C_HUMAN = COLOR_HUMAN   # blue — judged as human
-C_AI    = COLOR_AGENT   # red  — judged as AI
+C_HUMAN = COLOR_HUMAN
+C_AI    = COLOR_AGENT
 
-# Compute mean ± SEM per stage × judged identity
+# Compute mean SEM per stage judged identity
 gap_data = []
 for stage_name, sub in stage_defs.items():
     for j, label in [(0, "Judged Human"), (1, "Judged AI")]:
@@ -411,7 +411,7 @@ for stage_name, sub in stage_defs.items():
     if len(h_vals) > 0 and len(a_vals) > 0:
         u, p = stats.mannwhitneyu(a_vals, h_vals, alternative="greater")
 
-# Plot — difference (AI - Human) per stage
+# Plot difference (AI Human) per stage
 fig_c, ax_c = plt.subplots(figsize=(5.5, 4.2))
 
 x_pos = np.arange(len(STAGES))
@@ -458,30 +458,30 @@ fig_c.savefig(out_c, dpi=300, bbox_inches="tight")
 plt.close(fig_c)
 print(f"Generated figure: {out_c}")
 
-# H1+H2 pooled: is gap negative?
+# H1+H2 pooled: is gap negative=
 h12 = pd.concat([stage_defs["H1"], stage_defs["H2"]])
 h12_human = h12[h12["judged_ai"] == 0]["willingness"].dropna()
 h12_ai    = h12[h12["judged_ai"] == 1]["willingness"].dropna()
 u_h12, p_h12 = stats.mannwhitneyu(h12_ai, h12_human, alternative="two-sided")
 diff_h12 = h12_ai.mean() - h12_human.mean()
 
-# H3 vs H1+H2: does the gap significantly change?
+# H3 vs H1+H2: does the gap significantly change=
 h123 = pd.concat([stage_defs["H1"], stage_defs["H2"], stage_defs["H3"]]).copy()
 h123["is_H3"] = (h123["stage"] == "H3").astype(int)
 m_will_gap = smf.ols("willingness ~ judged_ai * is_H3", data=h123).fit(cov_type="HC3")
 interact_coef = m_will_gap.params["judged_ai:is_H3"]
 interact_p    = m_will_gap.pvalues["judged_ai:is_H3"]
 
-# --- Fig 4c: regression coefficients ---
+# Fig 4c: regression coefficients
 for term, label in predictors:
     coef = m_all.params[term]
     ci   = m_all.conf_int().loc[term]
     p    = m_all.pvalues[term]
 
-# --- Fig 4d: peer-centroid proximity gap H1 vs H3 ---
+# Fig 4d: peer-centroid proximity gap H1 vs H3
 
 # Per-stage gap values (already computed)
-# H1+H2 vs H3 gap difference: interaction test (judged_ai × is_H3) on peer_centroid_sim
+# H1+H2 vs H3 gap difference: interaction test (judged_ai is_H3) on peer_centroid_sim
 df_h1h2h3 = pd.concat([stage_defs["H1"], stage_defs["H2"], stage_defs["H3"]]).copy()
 df_h1h2h3["is_H3"] = (df_h1h2h3["stage"] == "H3").astype(int)
 m_gap = smf.ols("peer_centroid_sim ~ judged_ai * is_H3", data=df_h1h2h3).fit(cov_type="HC3")
@@ -530,11 +530,9 @@ for j, label in [(1, "AI-judged"), (0, "Human-judged")]:
 
 
 
- 
-# ══════════════════════════════════════════════════════════════════════════════
-# LaTeX 回归表生成
-# ══════════════════════════════════════════════════════════════════════════════
- 
+
+# LaTeX
+
 def format_p(p):
     if p < 0.001:
         return "$<$0.001"
@@ -542,30 +540,28 @@ def format_p(p):
         return f"{p:.3f}"
     else:
         return f"{p:.3f}"
- 
+
 def format_sig(p):
     if p < 0.001: return "***"
     if p < 0.01:  return "**"
     if p < 0.05:  return "*"
     return ""
- 
+
 def model_to_latex_rows(model, label_map=None):
     """
-    从 statsmodels OLS result 提取每个系数的行。
- 
+
     Parameters
     ----------
     model : statsmodels RegressionResultsWrapper
     label_map : dict, optional
-        {原始变量名: 显示名}, 未映射的变量用原名
- 
+
     Returns
     -------
     list of str (LaTeX table rows)
     """
     if label_map is None:
         label_map = {}
- 
+
     rows = []
     ci = model.conf_int()
     for term in model.params.index:
@@ -575,28 +571,26 @@ def model_to_latex_rows(model, label_map=None):
         p = model.pvalues[term]
         lo, hi = ci.loc[term]
         sig = format_sig(p)
- 
+
         rows.append(
             f"  {display} & {coef:+.3f} & {se:.3f} & "
             f"[{lo:.3f}, {hi:.3f}] & {format_p(p)}{sig} \\\\"
         )
     return rows
- 
- 
-# ── 变量名映射（仅保留感兴趣的预测变量）───────────────────────────────────
+
+
 LABEL_MAP_GLOBAL = {
     "judged_ai":              "Perceived AI identity",
     "pair_sim_z":             "Self--peer similarity",
     "peer_len_z":             "Peer description length",
     "peer_centroid_sim_z":    "Peer--centroid proximity",
 }
- 
-# 只输出感兴趣的预测变量，跳过 Intercept 和控制变量
+
+# Intercept
 DISPLAY_TERMS = list(LABEL_MAP_GLOBAL.keys())
- 
- 
-# ── 生成主模型表格 ────────────────────────────────────────────────────────────
-# 只保留 DISPLAY_TERMS 对应的行
+
+
+# DISPLAY_TERMS
 all_rows = []
 ci = m_all.conf_int()
 for term in m_all.params.index:
@@ -612,11 +606,11 @@ for term in m_all.params.index:
         f"  {display} & {coef:+.3f} & {se:.3f} & "
         f"[{lo:.3f}, {hi:.3f}] & {format_p(p)}{sig} \\\\"
     )
- 
+
 n_obs = int(m_all.nobs)
 r2 = m_all.rsquared
 r2_adj = m_all.rsquared_adj
- 
+
 latex_table = r"""
 \begin{table}[h]
 \centering
@@ -629,10 +623,10 @@ standardized; perceived AI identity is a binary indicator (1 = judged as AI).}
 Predictor & $\beta$ & SE & 95\% CI & $p$ \\
 \hline
 """
- 
+
 for row in all_rows:
     latex_table += row + "\n"
- 
+
 latex_table += r"""\hline
 \multicolumn{5}{l}{$N$ = """ + str(n_obs) + r"""; $R^2$ = """ + f"{r2:.3f}" + r"""; Adjusted $R^2$ = """ + f"{r2_adj:.3f}" + r"""} \\
 \multicolumn{5}{l}{Agent proportion condition controlled (categorical, ref: 12.5\%).} \\
@@ -640,8 +634,7 @@ latex_table += r"""\hline
 \end{tabular}
 \end{table}
 """
- 
-# ── 保存 ──────────────────────────────────────────────────────────────────────
+
 out_path = os.path.join(FIGS_DIR, "table_s1.tex")
 with open(out_path, "w") as f:
     f.write(latex_table)

@@ -11,7 +11,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 from scipy import stats
 
-# ── colours ──────────────────────────────────────────────────────────────────
+# colours
 C_AA   = "#b95a58"   # agent / agent-agent
 C_HH   = "#4292c6"   # human / human-human
 C_HA   = "#5aaa6b"   # human-agent cross
@@ -22,9 +22,7 @@ matplotlib.rcParams.update({
     "font.size":   9,
 })
 
-# ════════════════════════════════════════════════════════════════════════════
 # Shared helpers
-# ════════════════════════════════════════════════════════════════════════════
 
 def load_dataframe(fname):
     df = pickle.load(open(fname, 'rb'))
@@ -86,9 +84,7 @@ def embed_expressions(expressions, model=None, tokenizer=None,
     return X
 
 
-# ════════════════════════════════════════════════════════════════════════════
 # Core computation
-# ════════════════════════════════════════════════════════════════════════════
 
 def mean_pairwise_sim(vecs: np.ndarray) -> float:
     """Mean off-diagonal cosine similarity for a set of unit vectors."""
@@ -192,9 +188,7 @@ def calc_attractor_dynamics(tracker, model=None, tokenizer=None, batch_size=64, 
     }
 
 
-# ════════════════════════════════════════════════════════════════════════════
 # Visualization
-# ════════════════════════════════════════════════════════════════════════════
 
 def _ind_sim_to_group(pid_list, other_pid_list, rmap, answers, txt2idx, X_all):
     """
@@ -328,9 +322,9 @@ def plot_baseline_comparison(dynamics_dict, condition_keys, condition_labels, sa
     aa_means = np.array(aa_means)
     hh_means = np.array(hh_means)
 
-    ax.bar(x - width/2, aa_means, width, yerr=aa_sems, label="Agent–Agent", 
+    ax.bar(x - width/2, aa_means, width, yerr=aa_sems, label="Agent–Agent",
            color=C_AA, alpha=alpha, error_kw={"capsize": 4, "linewidth": 1.1})
-    ax.bar(x + width/2, hh_means, width, yerr=hh_sems, label="Human–Human", 
+    ax.bar(x + width/2, hh_means, width, yerr=hh_sems, label="Human–Human",
            color=C_HH, alpha=alpha, error_kw={"capsize": 4, "linewidth": 1.1})
 
     # significance brackets
@@ -373,7 +367,6 @@ def plot_adoption_persistence_collapsed(
     Right panel: Persistence (Early vs Late), Human vs Agent
 
     Data **pooled across all conditions** in condition_keys, then
-    per-individual early/late window means → grand mean ± SEM.
     Significance: Welch t-test, Human vs Agent at each time point.
     Style: grouped box plot (no outliers, white median line).
     """
@@ -391,7 +384,7 @@ def plot_adoption_persistence_collapsed(
 
     for metric_key, series_dict, ylabel, ax in panel_cfgs:
 
-        # ── pool individual-level window means across conditions ──────────
+        # pool individual level window means across conditions
         all_human_early, all_human_late = [], []
         all_agent_early, all_agent_late = [], []
 
@@ -438,7 +431,7 @@ def plot_adoption_persistence_collapsed(
         a_means = [a_m_e, a_m_l]
         a_sems  = [a_s_e, a_s_l]
 
-        # ── grouped bar chart: x = Human/Agent, bars = Early/Late ────────
+        # grouped bar chart: x Human/Agent, bars Early/Late
         C_EARLY = "#a6cde3"   # lighter
         C_LATE  = "#2171b5"   # darker
         x_role  = np.array([0.0, 1.0])   # Human, Agent
@@ -457,7 +450,7 @@ def plot_adoption_persistence_collapsed(
                        color=C_LATE,  alpha=alpha, label="Late",
                        error_kw={"capsize": 4, "linewidth": 1.1})
 
-        # ── significance: Early vs Late within each role ─────────────────
+        # significance: Early vs Late within each role
         def _stars(p):
             if not np.isfinite(p): return ""
             if p < 0.001: return "***"
@@ -475,7 +468,7 @@ def plot_adoption_persistence_collapsed(
                 y_top = max(e_m, l_m) + 0.003 # max(e_m + e_s, l_m + l_s) + 0.003
                 ax.text(xi, y_top, s, ha="center", va="bottom", fontsize=12)
 
-        # ── axis styling ─────────────────────────────────────────────────
+        # axis styling
         ax.set_xticks([0, 1])
         ax.set_xticklabels(rlabels, fontsize=12)
         ax.set_ylabel(ylabel, fontsize=14)
@@ -497,7 +490,6 @@ def plot_adoption_persistence_collapsed(
 
 
 # MAIN
-# ════════════════════════════════════════════════════════════════════════════
 
 if __name__ == "__main__":
     from modelscope import snapshot_download
@@ -510,7 +502,7 @@ if __name__ == "__main__":
     CACHE_PATH = os.path.join(INTER_DIR, "attractor_dynamics_dict.pkl")
 
 
-    # ── data ──────────────────────────────────────────────────────────────
+    # data
     fnames           = ["processed_data/A4.pkl",
                         "processed_data/A3.pkl",
                         "processed_data/A2.pkl",
@@ -520,7 +512,7 @@ if __name__ == "__main__":
     condition_keys   = [f"{r}|Neutral" for r in agent_ratio_list]
     condition_labels = ["12.5%", "33.3%", "50%", "75%"]
 
-    # ── compute or load ───────────────────────────────────────────────────
+    # compute or load
     # Recompute if cache missing new individual-level fields
     def _cache_valid():
         if not os.path.exists(CACHE_PATH): return False
@@ -529,7 +521,7 @@ if __name__ == "__main__":
         return all("_agent_ids" in d.get(c, {}) for c in condition_keys)
 
     if _cache_valid():
-        print("Loading cached attractor dynamics …")
+        print("Loading cached attractor dynamics ")
         with open(CACHE_PATH, "rb") as f:
             dynamics_dict = pickle.load(f)
     else:
@@ -564,12 +556,12 @@ if __name__ == "__main__":
         save_path=os.path.join(SAVE_DIR, "fig3a.pdf"),
     )
 
-    # ── Fig 3b: Adoption & Persistence (collapsed across conditions) ─────
+    # Fig 3b: Adoption & Persistence (collapsed across conditions)
     adopt_pkl = os.path.join(INTER_DIR, "adoption_series_dict_with_individual_results.pkl")
     perst_pkl = os.path.join(INTER_DIR, "persistence_series_dict_with_individual_results.pkl")
 
     if os.path.exists(adopt_pkl) and os.path.exists(perst_pkl):
-        print("Loading adoption/persistence data …")
+        print("Loading adoption/persistence data ")
         with open(adopt_pkl, "rb") as f:
             adoption_series_dict = pickle.load(f)
         with open(perst_pkl, "rb") as f:
