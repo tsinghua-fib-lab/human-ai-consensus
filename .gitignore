@@ -1,0 +1,6 @@
+figures/
+processed_data/model_cache/
+raw materials/
+__pycache__/
+*.pyc
+.pytest_cache/
